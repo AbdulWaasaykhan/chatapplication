@@ -44,12 +44,14 @@ class _BlurOnInactiveState extends State<BlurOnInactive> with WidgetsBindingObse
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    setState(() {
-      _blur = state != AppLifecycleState.resumed;
-    });
-  }
+ @override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  print("Lifecycle changed: $state");
+  setState(() {
+    _blur = state != AppLifecycleState.resumed;
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +72,6 @@ class _BlurOnInactiveState extends State<BlurOnInactive> with WidgetsBindingObse
 
 
 
-
 // ...other imports...
 
 class Myapp extends StatelessWidget {
@@ -80,12 +81,14 @@ class Myapp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: BlurOnInactive(
-        child: AppLock(
-          child: const AuthGate(),
-        ),
-      ),
       theme: Provider.of<ThemeProvider>(context).themeData,
+      builder: (context, child) {
+        return BlurOnInactive(child: child!); // <- wraps the whole widget tree
+      },
+      home: AppLock(
+        child: const AuthGate(),
+      ),
     );
   }
 }
+
