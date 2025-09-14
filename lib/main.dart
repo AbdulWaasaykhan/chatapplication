@@ -1,26 +1,69 @@
+import 'dart:ui';
+
 import 'package:chatapplication/services/auth/auth_gate.dart';
 import 'package:chatapplication/firebase_options.dart';
 import 'package:chatapplication/themes/theme_provider.dart';
+import 'package:chatapplication/components/app_lock.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:ui';
-import 'package:chatapplication/components/app_lock.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('[DEBUG] Firebase initialized.');
+  } catch (e) {
+    if (e.toString().contains('duplicate-app')) {
+      print('[DEBUG] Firebase already initialized.');
+    } else {
+      print('[ERROR] Firebase init failed: $e');
+      rethrow;
+    }
+  }
+
+  // Supabase init
+  await Supabase.initialize(
+    url: 'https://gbmgnvebdfezmjvjkmld.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdibWdudmViZGZlem1qdmprbWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2NjM4NTksImV4cCI6MjA3MjIzOTg1OX0.8ig8s3bBnxCLALoMi30IQ19CsAesO7zDP5VJtT5F1SY',
+  );
+  print('[DEBUG] Supabase initialized.');
+
   runApp(
     ChangeNotifierProvider(
       create: (context) => ThemeProvider(),
-      child: const Myapp(),
+      child: const MyApp(),
     ),
   );
 }
 
-  
-// ...other imports...
 
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Chat Application',
+      debugShowCheckedModeBanner: false,
+      theme: Provider.of<ThemeProvider>(context).themeData,
+      builder: (context, child) {
+        return BlurOnInactive(child: child!);
+      },
+      home: AppLock(
+        child: const AuthGate(),
+      ),
+    );
+  }
+}
+
+// ----------- Blur Wrapper -----------
 class BlurOnInactive extends StatefulWidget {
   final Widget child;
   const BlurOnInactive({required this.child, super.key});
@@ -29,7 +72,8 @@ class BlurOnInactive extends StatefulWidget {
   State<BlurOnInactive> createState() => _BlurOnInactiveState();
 }
 
-class _BlurOnInactiveState extends State<BlurOnInactive> with WidgetsBindingObserver {
+class _BlurOnInactiveState extends State<BlurOnInactive>
+    with WidgetsBindingObserver {
   bool _blur = false;
 
   @override
@@ -44,14 +88,12 @@ class _BlurOnInactiveState extends State<BlurOnInactive> with WidgetsBindingObse
     super.dispose();
   }
 
- @override
-void didChangeAppLifecycleState(AppLifecycleState state) {
-  print("Lifecycle changed: $state");
-  setState(() {
-    _blur = state != AppLifecycleState.resumed;
-  });
-}
-
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    setState(() {
+      _blur = state != AppLifecycleState.resumed;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,26 +111,3 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     );
   }
 }
-
-
-
-// ...other imports...
-
-class Myapp extends StatelessWidget {
-  const Myapp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: Provider.of<ThemeProvider>(context).themeData,
-      builder: (context, child) {
-        return BlurOnInactive(child: child!); // <- wraps the whole widget tree
-      },
-      home: AppLock(
-        child: const AuthGate(),
-      ),
-    );
-  }
-}
-

@@ -1,18 +1,20 @@
+import 'dart:io';
 import 'package:chatapplication/components/chat_bubble.dart';
 import 'package:chatapplication/components/my_textfield.dart';
 import 'package:chatapplication/services/auth/auth_service.dart';
 import 'package:chatapplication/services/auth/chat/chat_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverEmail;
   final String recieverID;
 
- ChatPage({
-  super.key, 
-  required this.receiverEmail,
-  required this.recieverID,
+  const ChatPage({
+    super.key,
+    required this.receiverEmail,
+    required this.recieverID,
   });
 
   @override
@@ -30,27 +32,28 @@ class _ChatPageState extends State<ChatPage> {
   // for textfied focus
   FocusNode myFocusNode = FocusNode();
 
+  // scroll controller
+  final ScrollController _scrollController = ScrollController();
+
+  // image picker
+  final ImagePicker _picker = ImagePicker();
+
   @override
   void initState() {
     super.initState();
 
-    // add listener to focus node
     myFocusNode.addListener(() {
       if (myFocusNode.hasFocus) {
-        // cause a delay so that the keyboard has to show up
-        // then the amount of remaning space will be calculated,
-        // then scrool down
         Future.delayed(
-          const Duration(milliseconds: 500),
-          () => scrollDown()
+          const Duration(milliseconds: 300),
+              () => scrollDown(),
         );
       }
     });
 
-    // wait a bit for listview to be built, then scrool to bottom
     Future.delayed(
       const Duration(milliseconds: 500),
-      () => scrollDown(),
+          () => scrollDown(),
     );
   }
 
@@ -61,34 +64,58 @@ class _ChatPageState extends State<ChatPage> {
     super.dispose();
   }
 
-  // scroll controller
-  final ScrollController _scrollController = ScrollController();
   void scrollDown() {
-    _scrollController.animateTo(
-    _scrollController.position.maxScrollExtent, 
-    duration: const Duration(seconds: 1), 
-    curve: Curves.fastOutSlowIn,
-    );
-  }
-
-  // send message
-  void sendMessage() async {
-    // if there is someting inside the textfield
-    if (_messageController.text.isNotEmpty) {
-      // send the message
-      await _chatService.sendMessage(
-  _authService.getCurrentUser()!.uid, // senderID (current user)
-  widget.recieverID,                  // receiverID
-  _messageController.text,            // message
-);
-
-      // clear text controller
-      _messageController.clear();
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0, // since reverse:true
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
-
-    scrollDown();
   }
 
+  // ---------------- TEXT MESSAGE ----------------
+  void sendMessage() async {
+    if (_messageController.text.isNotEmpty) {
+      await _chatService.sendMessage(
+        _authService.getCurrentUser()!.uid,
+        widget.recieverID,
+        _messageController.text,
+      );
+      _messageController.clear();
+      scrollDown();
+    }
+  }
+
+  // ---------------- MEDIA MESSAGE ----------------
+  Future<void> sendMedia(bool isVideo) async {
+    final pickedFile = await (isVideo
+        ? _picker.pickVideo(source: ImageSource.gallery)
+        : _picker.pickImage(source: ImageSource.gallery));
+
+    if (pickedFile != null) {
+      // show loading while uploading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      await _chatService.sendMediaMessage(
+        _authService.getCurrentUser()!.uid,
+        widget.recieverID,
+        File(pickedFile.path),
+        isVideo ? "video" : "image",
+      );
+
+      Navigator.of(context).pop(); // close loading dialog
+      scrollDown();
+    }
+  }
+
+  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -98,113 +125,106 @@ class _ChatPageState extends State<ChatPage> {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.grey,
         elevation: 0,
-        ),
+      ),
       body: Column(
         children: [
-        // display all messages
-        Expanded(
-          child: _buildMessageList()
-        ),
-
-        //user input
-        _buildUserInput(),
-      ],
-     ),
+          Expanded(child: _buildMessageList()),
+          _buildUserInput(),
+        ],
+      ),
     );
   }
 
   // build message list
- Widget _buildMessageList() {
-  String senderID = _authService.getCurrentUser()!.uid;
-  return StreamBuilder(
-    stream: _chatService.getMessages(senderID, widget.recieverID ),
-    
-    builder: (context, snapshot) {
-  print('Snapshot hasData: ${snapshot.hasData}, docs: ${snapshot.data?.docs.length}');
-  // ...rest of your code
-      // errors
-      if (snapshot.hasError) {
-        return const Text("Error");
-      }
-      
-      // loading
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Text("Loading..");
-      }
+  Widget _buildMessageList() {
+    String senderID = _authService.getCurrentUser()!.uid;
+    return StreamBuilder<QuerySnapshot>(
+      stream: _chatService.getMessages(senderID, widget.recieverID),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(child: Text("Error loading messages"));
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("No messages yet."));
+        }
 
-      // ADD THIS CHECK:
-      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-        return const Center(child: Text("No messages yet."));
-      }
+        final docs = snapshot.data!.docs;
 
-      // return list view
-      return ListView(
-        controller: _scrollController,
-        children: 
-          snapshot.data!.docs.map((doc) => _buildMessageItem(doc)).toList(),
-      );
-    },
-  );
-}
+        return ListView.builder(
+          controller: _scrollController,
+          reverse: true, // newest at bottom
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            return _buildMessageItem(docs[index]);
+          },
+        );
+      },
+    );
+  }
 
-  //build message item
+  // build message item
   Widget _buildMessageItem(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // is cirrent user
     bool isCurrentUser = data['senderID'] == _authService.getCurrentUser()!.uid;
-
-    // align message to the right if sender is the curent user, otherwise left
-    var alignment = 
+    var alignment =
     isCurrentUser ? Alignment.centerRight : Alignment.centerLeft;
 
     return Container(
       alignment: alignment,
-      child: Column(
-        crossAxisAlignment: 
-        isCurrentUser ? CrossAxisAlignment.end :CrossAxisAlignment.start,
-        children: [
-        ChatBubble(
-          message: data["message"], 
-          isCurrentUser: isCurrentUser
-          )
-        ],
-      )
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ChatBubble(
+        message: data,
+        isCurrentUser: isCurrentUser,
+      ),
     );
   }
 
-  // build message input
+  // build user input
   Widget _buildUserInput() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 50.0),
-      child: Row(
-        children: [
-          // textfield should take up most of the space
-          Expanded(
-            child: MyTextfield(
-            controller: _messageController, 
-            hintText: "Type a message", 
-            obscureText: false,
-            focusNode: myFocusNode,
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+        child: Row(
+          children: [
+            // gallery (image)
+            IconButton(
+              icon: const Icon(Icons.photo, color: Colors.blue),
+              onPressed: () => sendMedia(false),
             ),
+            // video
+            IconButton(
+              icon: const Icon(Icons.videocam, color: Colors.red),
+              onPressed: () => sendMedia(true),
             ),
-      
+
+            // textfield
+            Expanded(
+              child: MyTextfield(
+                controller: _messageController,
+                hintText: "Type a message",
+                obscureText: false,
+                focusNode: myFocusNode,
+              ),
+            ),
+
             // send button
             Container(
               decoration: const BoxDecoration(
                 color: Colors.green,
-              shape: BoxShape.circle,
+                shape: BoxShape.circle,
               ),
-              margin:const EdgeInsets.only(right: 25),
+              margin: const EdgeInsets.only(right: 8),
               child: IconButton(
-                onPressed: sendMessage, 
-                icon: const Icon(
-                  Icons.arrow_upward,
-                  color: Colors.white,
-                  ),
-                        ),
+                onPressed: sendMessage,
+                icon: const Icon(Icons.arrow_upward, color: Colors.white),
+              ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }

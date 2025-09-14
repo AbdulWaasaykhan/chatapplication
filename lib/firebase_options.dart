@@ -25,15 +25,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -52,6 +46,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '556879010522',
     projectId: 'chatapp-feaa9',
     authDomain: 'chatapp-feaa9.firebaseapp.com',
+    databaseURL: 'https://chatapp-feaa9-default-rtdb.firebaseio.com',
     storageBucket: 'chatapp-feaa9.firebasestorage.app',
     measurementId: 'G-0ZQN43P27B',
   );
@@ -61,6 +56,7 @@ class DefaultFirebaseOptions {
     appId: '1:556879010522:android:9114e913e18804f14a23e3',
     messagingSenderId: '556879010522',
     projectId: 'chatapp-feaa9',
+    databaseURL: 'https://chatapp-feaa9-default-rtdb.firebaseio.com',
     storageBucket: 'chatapp-feaa9.firebasestorage.app',
   );
 
@@ -69,7 +65,30 @@ class DefaultFirebaseOptions {
     appId: '1:556879010522:ios:c598f148d6218dc94a23e3',
     messagingSenderId: '556879010522',
     projectId: 'chatapp-feaa9',
+    databaseURL: 'https://chatapp-feaa9-default-rtdb.firebaseio.com',
     storageBucket: 'chatapp-feaa9.firebasestorage.app',
     iosBundleId: 'com.example.chatapplication',
   );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyDyAu4iN8a-OM-glcmFHx2uAh2Xsq5JDok',
+    appId: '1:556879010522:ios:c598f148d6218dc94a23e3',
+    messagingSenderId: '556879010522',
+    projectId: 'chatapp-feaa9',
+    databaseURL: 'https://chatapp-feaa9-default-rtdb.firebaseio.com',
+    storageBucket: 'chatapp-feaa9.firebasestorage.app',
+    iosBundleId: 'com.example.chatapplication',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyC8MujYLyTffnraEH9W2ZDzqsh0MrxI228',
+    appId: '1:556879010522:web:a56b9d2c9d275a8d4a23e3',
+    messagingSenderId: '556879010522',
+    projectId: 'chatapp-feaa9',
+    authDomain: 'chatapp-feaa9.firebaseapp.com',
+    databaseURL: 'https://chatapp-feaa9-default-rtdb.firebaseio.com',
+    storageBucket: 'chatapp-feaa9.firebasestorage.app',
+    measurementId: 'G-GPW9N4YNWG',
+  );
+
 }
