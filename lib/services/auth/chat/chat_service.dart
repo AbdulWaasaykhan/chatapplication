@@ -3,7 +3,7 @@ import 'package:chatapplication/models/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'package:logger/logger.dart';
 
 class ChatService {
   // instances
@@ -54,55 +54,59 @@ class ChatService {
   }
 
   // media message
- Future<void> sendMediaMessage(
-    String senderID,
-    String recieverID,
-    File file,
-    String type,
-) async {
-  final String currentUserEmail = _auth.currentUser!.email!;
-  final Timestamp timestamp = Timestamp.now();
+  Future<void> sendMediaMessage(
+      String senderID,
+      String recieverID,
+      File file,
+      String type, // "image" or "video"
+      ) async {
+    final String currentUserEmail = _auth.currentUser!.email!;
+    final Timestamp timestamp = Timestamp.now();
 
-  final fileExt = file.path.split('.').last;
-  final fileName = "${DateTime.now().millisecondsSinceEpoch}.$fileExt";
-  final filePath = "$senderID-$recieverID/$fileName";
+    final fileExt = file.path.split('.').last;
+    final fileName = "${DateTime.now().millisecondsSinceEpoch}.$fileExt";
 
-  try {
-    // Upload file to supabase storage
-    await _supabase.storage.from('chat_media').upload(filePath, file);
-
-    // Create signed URL for the uploaded file (valid 7 days)
-    final signedUrl = await _supabase.storage.from('chat_media').createSignedUrl(filePath, 60 * 60 * 24 * 7);
-    if (signedUrl == null || signedUrl.isEmpty) {
-      throw Exception('Failed to create signed URL');
-    }
-
-    // Create media message object
-    Message newMessage = Message(
-      senderID: senderID,
-      senderEmail: currentUserEmail,
-      recieverID: recieverID,
-      message: "",
-      type: type,
-      mediaUrl: signedUrl,
-      timestamp: timestamp,
-    );
-
+    // Use chatroomID folder structure so files are grouped
     List<String> ids = [senderID, recieverID];
     ids.sort();
-    String chatroomID = ids.join('_');
+    final String chatroomID = ids.join('_');
+    final String filePath = "$chatroomID/$fileName";
+    final Logger logger = Logger();
 
-    // Save message to Firestore
-    await _firestore
-        .collection("chat_rooms")
-        .doc(chatroomID)
-        .collection("messages")
-        .add(newMessage.toMap());
-  } catch (e) {
-    print('[ERROR] sendMediaMessage failed: $e');
-    rethrow;
+    try {
+      // Upload file to Supabase (overwrite allowed if same name)
+      await _supabase.storage.from('chat_media').upload(
+        filePath,
+        file,
+        fileOptions: const FileOptions(upsert: true),
+      );
+
+      // Get permanent public URL (since bucket is public)
+      final String publicUrl =
+      _supabase.storage.from('chat_media').getPublicUrl(filePath);
+
+      // Create media message object
+      Message newMessage = Message(
+        senderID: senderID,
+        senderEmail: currentUserEmail,
+        recieverID: recieverID,
+        message: "",
+        type: type,
+        mediaUrl: publicUrl,
+        timestamp: timestamp,
+      );
+
+      // Save message to Firestore
+      await _firestore
+          .collection("chat_rooms")
+          .doc(chatroomID)
+          .collection("messages")
+          .add(newMessage.toMap());
+    } catch (e, st) {
+      logger.e('sendMediaMessage failed: $e', error: e, stackTrace: st);
+      rethrow;
+    }
   }
-}
 
   // get messages
   Stream<QuerySnapshot> getMessages(String userID, String otherUserID) {

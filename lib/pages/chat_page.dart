@@ -29,7 +29,7 @@ class _ChatPageState extends State<ChatPage> {
   final ChatService _chatService = ChatService();
   final AuthService _authService = AuthService();
 
-  // for textfied focus
+  // for textfield focus
   FocusNode myFocusNode = FocusNode();
 
   // scroll controller
@@ -67,7 +67,7 @@ class _ChatPageState extends State<ChatPage> {
   void scrollDown() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
-        0, // since reverse:true
+        _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
@@ -98,20 +98,24 @@ class _ChatPageState extends State<ChatPage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const Center(
-          child: CircularProgressIndicator(),
-        ),
+        builder: (_) => const Center(child: CircularProgressIndicator()),
       );
 
-      await _chatService.sendMediaMessage(
-        _authService.getCurrentUser()!.uid,
-        widget.recieverID,
-        File(pickedFile.path),
-        isVideo ? "video" : "image",
-      );
-
-      Navigator.of(context).pop(); // close loading dialog
-      scrollDown();
+      try {
+        await _chatService.sendMediaMessage(
+          _authService.getCurrentUser()!.uid,
+          widget.recieverID,
+          File(pickedFile.path),
+          isVideo ? "video" : "image",
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Upload failed: $e")),
+        );
+      } finally {
+        Navigator.of(context).pop(); // close loading dialog
+        scrollDown();
+      }
     }
   }
 
@@ -119,7 +123,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: Text(widget.receiverEmail),
         backgroundColor: Colors.transparent,
@@ -153,9 +157,11 @@ class _ChatPageState extends State<ChatPage> {
 
         final docs = snapshot.data!.docs;
 
+        // auto-scroll to bottom whenever new messages come in
+        WidgetsBinding.instance.addPostFrameCallback((_) => scrollDown());
+
         return ListView.builder(
           controller: _scrollController,
-          reverse: true, // newest at bottom
           itemCount: docs.length,
           itemBuilder: (context, index) {
             return _buildMessageItem(docs[index]);
@@ -164,6 +170,7 @@ class _ChatPageState extends State<ChatPage> {
       },
     );
   }
+
 
   // build message item
   Widget _buildMessageItem(DocumentSnapshot doc) {
@@ -192,12 +199,12 @@ class _ChatPageState extends State<ChatPage> {
           children: [
             // gallery (image)
             IconButton(
-              icon: const Icon(Icons.photo, color: Colors.blue),
+              icon: const Icon(Icons.photo, color: Colors.white),
               onPressed: () => sendMedia(false),
             ),
             // video
             IconButton(
-              icon: const Icon(Icons.videocam, color: Colors.red),
+              icon: const Icon(Icons.videocam, color: Colors.white),
               onPressed: () => sendMedia(true),
             ),
 
@@ -214,13 +221,13 @@ class _ChatPageState extends State<ChatPage> {
             // send button
             Container(
               decoration: const BoxDecoration(
-                color: Colors.green,
+                color: Colors.white,
                 shape: BoxShape.circle,
               ),
               margin: const EdgeInsets.only(right: 8),
               child: IconButton(
                 onPressed: sendMessage,
-                icon: const Icon(Icons.arrow_upward, color: Colors.white),
+                icon: const Icon(Icons.arrow_upward, color: Colors.black),
               ),
             ),
           ],

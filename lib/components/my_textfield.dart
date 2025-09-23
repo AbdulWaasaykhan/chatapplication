@@ -12,30 +12,35 @@ class MyTextfield extends StatelessWidget {
     required this.obscureText,
     required this.controller,
     this.focusNode,
-    });
+  });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal:25.0),
+      padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 8.0),
       child: TextField(
-        obscureText: obscureText,
-        controller:controller,
+        controller: controller,
         focusNode: focusNode,
-      decoration: InputDecoration(
-        enabledBorder: OutlineInputBorder(
-          borderSide:
-           BorderSide(color: Theme.of(context).colorScheme.tertiary),
+        obscureText: obscureText,
+        style: TextStyle(color: theme.colorScheme.onSurface),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+          filled: true,
+          fillColor: theme.colorScheme.surface,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.5)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.colorScheme.primary),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
-        ),
-        fillColor: Theme.of(context).colorScheme.secondary,
-        filled: true,
-        hintText: hintText,
-       ),
       ),
-     ); 
-  
+    );
   }
 }

@@ -52,6 +52,7 @@ class ChatBubble extends StatelessWidget {
 
   Widget _buildMessageContent(BuildContext context, bool isDarkMode) {
     final String type = message["type"] ?? "text";
+    final String mediaUrl = message["mediaUrl"] ?? "";
 
     switch (type) {
       case "text":
@@ -66,13 +67,18 @@ class ChatBubble extends StatelessWidget {
         );
 
       case "image":
+        if (mediaUrl.isEmpty) {
+          return const Icon(Icons.broken_image, size: 50, color: Colors.red);
+        }
         return GestureDetector(
           onTap: () {
             showDialog(
               context: context,
               builder: (_) => Dialog(
+                backgroundColor: Colors.black,
+                insetPadding: const EdgeInsets.all(8),
                 child: InteractiveViewer(
-                  child: Image.network(message["mediaUrl"] ?? ""),
+                  child: Image.network(mediaUrl),
                 ),
               ),
             );
@@ -80,11 +86,11 @@ class ChatBubble extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: Image.network(
-              message["mediaUrl"] ?? "",
+              mediaUrl,
               width: 220,
               height: 220,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
+              errorBuilder: (_, _, _) =>
               const Icon(Icons.broken_image, size: 50, color: Colors.red),
               loadingBuilder: (context, child, loadingProgress) =>
               loadingProgress == null
@@ -99,10 +105,13 @@ class ChatBubble extends StatelessWidget {
         );
 
       case "video":
+        if (mediaUrl.isEmpty) {
+          return const Text("⚠ Invalid video URL");
+        }
         return SizedBox(
           width: 250,
           height: 200,
-          child: VideoPlayerBubble(url: message["mediaUrl"] ?? ""),
+          child: VideoPlayerBubble(url: mediaUrl),
         );
 
       default:
@@ -123,6 +132,7 @@ class VideoPlayerBubble extends StatefulWidget {
 class _VideoPlayerBubbleState extends State<VideoPlayerBubble> {
   late VideoPlayerController _controller;
   bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -133,6 +143,7 @@ class _VideoPlayerBubbleState extends State<VideoPlayerBubble> {
         setState(() => _isLoading = false);
       }).catchError((error) {
         debugPrint("Video load error: $error");
+        setState(() => _hasError = true);
       });
   }
 
@@ -144,12 +155,16 @@ class _VideoPlayerBubbleState extends State<VideoPlayerBubble> {
 
   @override
   Widget build(BuildContext context) {
+    if (_hasError) {
+      return const Center(child: Text("⚠ Failed to load video"));
+    }
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
     if (!_controller.value.isInitialized) {
-      return const Center(child: Text("⚠ Video failed to load"));
+      return const Center(child: Text("⚠ Video not initialized"));
     }
 
     return Stack(

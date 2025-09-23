@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:logger/logger.dart';
+
+final Logger logger = Logger();
 
 class AppLock extends StatefulWidget {
   final Widget child;
@@ -32,7 +35,7 @@ class _AppLockState extends State<AppLock> {
         didAuthenticate = true;
       }
     } catch (e) {
-      print('Authentication error: $e');
+      logger.d('Authentication error: $e');
       didAuthenticate = true;
     }
     setState(() {

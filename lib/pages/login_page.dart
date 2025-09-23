@@ -30,7 +30,7 @@ class LoginPage extends StatelessWidget  {
     // catch any errors
     catch (e) {
       showDialog(
-        context: context, 
+        context: context,
         builder: (context) => AlertDialog(
         title: Text(e.toString()
        ),
@@ -85,7 +85,7 @@ class LoginPage extends StatelessWidget  {
 
         // login buttion
         MyButton(
-          text: "login",
+          text: "Login",
           onTap: () => login(context),
         ),
 
@@ -93,9 +93,10 @@ class LoginPage extends StatelessWidget  {
 
         // register now
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text("Not a member? ",
-            style: 
+            style:
             TextStyle(color:  Theme.of(context).colorScheme.primary),
             ),
             GestureDetector(
@@ -114,5 +115,5 @@ class LoginPage extends StatelessWidget  {
     )
    );
   }
- } 
+ }
 

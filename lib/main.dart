@@ -1,14 +1,17 @@
 import 'dart:ui';
 
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:chatapplication/services/auth/auth_gate.dart';
 import 'package:chatapplication/firebase_options.dart';
-import 'package:chatapplication/themes/theme_provider.dart';
 import 'package:chatapplication/components/app_lock.dart';
-
-import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:chatapplication/themes/theme_provider.dart';
+import 'package:logger/logger.dart';
+
+final Logger logger = Logger();
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,30 +20,34 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    print('[DEBUG] Firebase initialized.');
+    logger.d('[DEBUG] Firebase initialized.');
   } catch (e) {
     if (e.toString().contains('duplicate-app')) {
-      print('[DEBUG] Firebase already initialized.');
+      logger.d('[DEBUG] Firebase already initialized.');
     } else {
-      print('[ERROR] Firebase init failed: $e');
+      logger.d('[DEBUG] Firebase init failed.');
       rethrow;
     }
   }
 
   // Supabase init
   await Supabase.initialize(
-    url: 'https://gbmgnvebdfezmjvjkmld.supabase.co',
+    url: 'https://fmlkenusgqlfzodnxyqf.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdibWdudmViZGZlem1qdmprbWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2NjM4NTksImV4cCI6MjA3MjIzOTg1OX0.8ig8s3bBnxCLALoMi30IQ19CsAesO7zDP5VJtT5F1SY',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtbGtlbnVzZ3FsZnpvZG54eXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTk1MzMsImV4cCI6MjA3Mzg5NTUzM30.uxh9YaMC0N2oms0H8hqXTx3rQfyCRtHU-Q3JnGo9Ya8',
   );
-  print('[DEBUG] Supabase initialized.');
+  logger.d('[DEBUG] Supabase initialized.');
 
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => ThemeProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+
+      ],
       child: const MyApp(),
     ),
   );
+
 }
 
 
@@ -104,7 +111,7 @@ class _BlurOnInactiveState extends State<BlurOnInactive>
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Container(color: Colors.black.withOpacity(0.2)),
+              child: Container(color: Colors.black.withValues(alpha: 0.2)),
             ),
           ),
       ],
