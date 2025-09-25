@@ -199,12 +199,12 @@ class _ChatPageState extends State<ChatPage> {
           children: [
             // gallery (image)
             IconButton(
-              icon: const Icon(Icons.photo, color: Colors.white),
+              icon: const Icon(Icons.photo, color: Color.fromRGBO(98, 144, 230, 1)),
               onPressed: () => sendMedia(false),
             ),
             // video
             IconButton(
-              icon: const Icon(Icons.videocam, color: Colors.white),
+              icon: const Icon(Icons.videocam, color: Color.fromRGBO(98, 144, 230, 1)),
               onPressed: () => sendMedia(true),
             ),
 
