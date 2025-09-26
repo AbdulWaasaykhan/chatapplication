@@ -80,24 +80,24 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _buildUserListItem(Map<String, dynamic> userData, BuildContext context) {
-    if (userData["email"] != _authService.getCurrentUser()!.email) {
-      return UserTile(
-        text: userData["username"] ?? userData["email"], // 🔥 show username if exists
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatPage(
-                receiverEmail: userData["email"],
-                recieverID: userData["uid"],
-              ),
+  if (userData["email"] != _authService.getCurrentUser()!.email) {
+    return UserTile(
+      text: userData["username"] ?? userData["email"], // 🔥 show username if exists
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatPage(
+              receiverEmail: userData["email"],
+              receiverID: userData["uid"],  // <-- FIXED here
             ),
-          );
-        },
-      );
-    } else {
-      return Container();
-    }
+          ),
+        );
+      },
+    );
+  } else {
+    return Container();
   }
+}
 
 }

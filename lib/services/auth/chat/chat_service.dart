@@ -6,46 +6,96 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:logger/logger.dart';
 
 class ChatService {
-  // instances
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // user stream
-  Stream<List<Map<String, dynamic>>> getUserStream() {
-    return _firestore.collection("Users").snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return doc.data();
-      }).toList();
+  // ---------------------- TYPING STATUS ----------------------
+
+  /// Get the chatroom ID by sorting user IDs
+  String getChatroomID(String user1, String user2) {
+    List<String> ids = [user1, user2];
+    ids.sort();
+    return ids.join('_');
+  }
+
+  /// Listen to typing status of the other user inside the chatroom
+  Stream<bool> getTypingStatus(String otherUserID) {
+    final String currentUserID = _auth.currentUser!.uid;
+    final String chatroomID = getChatroomID(currentUserID, otherUserID);
+
+    return _firestore.collection('typing_status').doc(chatroomID).snapshots().map((snapshot) {
+      if (!snapshot.exists) return false;
+      Map<String, dynamic> data = snapshot.data() ?? {};
+      return data[otherUserID] ?? false;
     });
   }
 
-  // text message
+  /// Set typing status of current user inside the chatroom
+  Future<void> setTypingStatus(String otherUserID, bool isTyping) async {
+    final String currentUserID = _auth.currentUser!.uid;
+    final String chatroomID = getChatroomID(currentUserID, otherUserID);
+
+    await _firestore.collection('typing_status').doc(chatroomID).set({
+      currentUserID: isTyping,
+      'timestamp': Timestamp.now(),
+    }, SetOptions(merge: true));
+  }
+
+  // ---------------------- READ RECEIPTS ----------------------
+
+  Future<void> markMessageAsRead(String messageID, String receiverID) async {
+    String senderID = _auth.currentUser!.uid;
+    String chatroomID = getChatroomID(senderID, receiverID);
+
+    await _firestore
+        .collection('chat_rooms')
+        .doc(chatroomID)
+        .collection('messages')
+        .doc(messageID)
+        .update({'read': true});
+  }
+
+  Future<void> markMessagesAsRead(String receiverID) async {
+    String senderID = _auth.currentUser!.uid;
+    String chatroomID = getChatroomID(senderID, receiverID);
+
+    final messages = await _firestore
+        .collection('chat_rooms')
+        .doc(chatroomID)
+        .collection('messages')
+        .where('senderID', isNotEqualTo: senderID)
+        .where('read', isEqualTo: false)
+        .get();
+
+    for (var doc in messages.docs) {
+      await doc.reference.update({'read': true});
+    }
+  }
+
+  // ---------------------- MESSAGES ----------------------
+
   Future<void> sendMessage(
-      String senderID,
-      String recieverID,
-      String message,
-      ) async {
+    String senderID,
+    String receiverID,
+    String message,
+  ) async {
     final String currentUserEmail = _auth.currentUser!.email!;
     final Timestamp timestamp = Timestamp.now();
 
-    // create text message
     Message newMessage = Message(
       senderID: senderID,
       senderEmail: currentUserEmail,
-      recieverID: recieverID,
+      receiverID: receiverID,
       message: message,
       type: "text",
       mediaUrl: null,
       timestamp: timestamp,
+      read: false,
     );
 
-    // construct unique chatroom ID
-    List<String> ids = [senderID, recieverID];
-    ids.sort();
-    String chatroomID = ids.join('_');
+    String chatroomID = getChatroomID(senderID, receiverID);
 
-    // save message to firestore
     await _firestore
         .collection("chat_rooms")
         .doc(chatroomID)
@@ -53,50 +103,43 @@ class ChatService {
         .add(newMessage.toMap());
   }
 
-  // media message
   Future<void> sendMediaMessage(
-      String senderID,
-      String recieverID,
-      File file,
-      String type, // "image" or "video"
-      ) async {
+    String senderID,
+    String receiverID,
+    File file,
+    String type,
+  ) async {
     final String currentUserEmail = _auth.currentUser!.email!;
     final Timestamp timestamp = Timestamp.now();
-
-    final fileExt = file.path.split('.').last;
-    final fileName = "${DateTime.now().millisecondsSinceEpoch}.$fileExt";
-
-    // Use chatroomID folder structure so files are grouped
-    List<String> ids = [senderID, recieverID];
-    ids.sort();
-    final String chatroomID = ids.join('_');
-    final String filePath = "$chatroomID/$fileName";
     final Logger logger = Logger();
 
     try {
-      // Upload file to Supabase (overwrite allowed if same name)
+      final fileExt = file.path.split('.').last;
+      final fileName = "${DateTime.now().millisecondsSinceEpoch}.$fileExt";
+
+      String chatroomID = getChatroomID(senderID, receiverID);
+      final String filePath = "$chatroomID/$fileName";
+
       await _supabase.storage.from('chat_media').upload(
         filePath,
         file,
         fileOptions: const FileOptions(upsert: true),
       );
 
-      // Get permanent public URL (since bucket is public)
       final String publicUrl =
-      _supabase.storage.from('chat_media').getPublicUrl(filePath);
+          _supabase.storage.from('chat_media').getPublicUrl(filePath);
 
-      // Create media message object
       Message newMessage = Message(
         senderID: senderID,
         senderEmail: currentUserEmail,
-        recieverID: recieverID,
+        receiverID: receiverID,
         message: "",
         type: type,
         mediaUrl: publicUrl,
         timestamp: timestamp,
+        read: false,
       );
 
-      // Save message to Firestore
       await _firestore
           .collection("chat_rooms")
           .doc(chatroomID)
@@ -108,11 +151,8 @@ class ChatService {
     }
   }
 
-  // get messages
   Stream<QuerySnapshot> getMessages(String userID, String otherUserID) {
-    List<String> ids = [userID, otherUserID];
-    ids.sort();
-    String chatRoomID = ids.join('_');
+    String chatRoomID = getChatroomID(userID, otherUserID);
 
     return _firestore
         .collection("chat_rooms")
@@ -120,5 +160,11 @@ class ChatService {
         .collection("messages")
         .orderBy("timestamp", descending: false)
         .snapshots();
+  }
+
+  Stream<List<Map<String, dynamic>>> getUserStream() {
+    return _firestore.collection("Users").snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => doc.data()).toList();
+    });
   }
 }

@@ -6,11 +6,13 @@ import 'package:video_player/video_player.dart';
 class ChatBubble extends StatelessWidget {
   final Map<String, dynamic> message;
   final bool isCurrentUser;
+  final bool isRead;  // <-- New parameter for read receipt
 
   const ChatBubble({
     super.key,
     required this.message,
     required this.isCurrentUser,
+    this.isRead = false,  // default false if not provided
   });
 
   @override
@@ -26,15 +28,15 @@ class ChatBubble extends StatelessWidget {
     // chat bubble radius
     final radius = isCurrentUser
         ? const BorderRadius.only(
-      topLeft: Radius.circular(14),
-      topRight: Radius.circular(14),
-      bottomLeft: Radius.circular(14),
-    )
+            topLeft: Radius.circular(14),
+            topRight: Radius.circular(14),
+            bottomLeft: Radius.circular(14),
+          )
         : const BorderRadius.only(
-      topLeft: Radius.circular(14),
-      topRight: Radius.circular(14),
-      bottomRight: Radius.circular(14),
-    );
+            topLeft: Radius.circular(14),
+            topRight: Radius.circular(14),
+            bottomRight: Radius.circular(14),
+          );
 
     return Align(
       alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -45,7 +47,27 @@ class ChatBubble extends StatelessWidget {
         ),
         padding: const EdgeInsets.all(10),
         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-        child: _buildMessageContent(context, isDarkMode),
+        child: Column(
+          crossAxisAlignment:
+              isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildMessageContent(context, isDarkMode),
+            if (isCurrentUser)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+                child: Text(
+                  isRead ? "✓✓ Read" : "✓ Sent",
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isRead
+                        ? Colors.blueAccent
+                        : (isDarkMode ? Colors.white54 : Colors.black45),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -91,15 +113,15 @@ class ChatBubble extends StatelessWidget {
               height: 220,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) =>
-              const Icon(Icons.broken_image, size: 50, color: Colors.red),
+                  const Icon(Icons.broken_image, size: 50, color: Colors.red),
               loadingBuilder: (context, child, loadingProgress) =>
-              loadingProgress == null
-                  ? child
-                  : const SizedBox(
-                width: 220,
-                height: 220,
-                child: Center(child: CircularProgressIndicator()),
-              ),
+                  loadingProgress == null
+                      ? child
+                      : const SizedBox(
+                          width: 220,
+                          height: 220,
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
             ),
           ),
         );
