@@ -1,3 +1,5 @@
+// lib/pages/register_page.dart
+
 import 'package:chatapplication/services/auth/auth_service.dart';
 import 'package:flutter/material.dart';
 import '../components/my_button.dart';
@@ -14,11 +16,14 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  // Controllers
+  // controllers
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _pwController = TextEditingController();
   final TextEditingController _confirmPwController = TextEditingController();
+
+  bool _showConfirmPw = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -29,44 +34,104 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _pwController.addListener(() {
+      setState(() {
+        _showConfirmPw = _pwController.text.isNotEmpty;
+      });
+    });
+  }
+
+  // --- CORRECTED REGISTER METHOD ---
   Future<void> register(BuildContext context) async {
-    final _auth = AuthService();
+    setState(() => _isLoading = true);
 
-    if (_pwController.text == _confirmPwController.text) {
-      try {
-        var userCredential = await _auth.signUpWithEmailPassword(
-          _emailController.text,
-          _pwController.text,
-        );
+    final auth = AuthService();
 
-        if (userCredential != null && userCredential.user != null) {
-          await FirebaseFirestore.instance
-              .collection('Users')
-              .doc(userCredential.user!.uid)
-              .set({
-            'email': userCredential.user!.email,
-            'uid': userCredential.user!.uid,
-            'username': _usernameController.text,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-        }
-      } catch (e) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Error"),
-            content: Text(e.toString()),
-          ),
-        );
-      }
-    } else {
-      showDialog(
-        context: context,
-        builder: (context) => const AlertDialog(
-          title: Text("Passwords don't match!"),
-        ),
-      );
+    // --- All your validation logic is good, no changes needed there ---
+    if (_emailController.text.trim().isEmpty) {
+      _showErrorDialog(context, "Email required", "Please enter an email address.");
+      return;
     }
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+    if (!emailRegex.hasMatch(_emailController.text.trim())) {
+      _showErrorDialog(context, "Invalid email", "Please enter a valid email address.");
+      return;
+    }
+    if (_usernameController.text.trim().isEmpty) {
+      _showErrorDialog(context, "Username required", "Please enter a username.");
+      return;
+    }
+    if (_pwController.text.trim().isEmpty) {
+      _showErrorDialog(context, "Password required", "Please enter a password.");
+      return;
+    }
+    if (_pwController.text.trim().length < 6) {
+      _showErrorDialog(context, "Weak Password", "Password must be at least 6 characters long.");
+      return;
+    }
+    if (_pwController.text != _confirmPwController.text) {
+      _showErrorDialog(context, "Passwords don't match!", "Please re-enter your password.");
+      return;
+    }
+
+    try {
+      // check if username already exists
+      final existingUser = await FirebaseFirestore.instance
+          .collection('Users')
+          .where('username', isEqualTo: _usernameController.text.trim())
+          .get();
+
+      if (existingUser.docs.isNotEmpty) {
+        _showErrorDialog(context, "Username taken", "That username already exists, please try another one.");
+        return;
+      }
+
+      // create user in firebase auth (this also creates the initial document)
+      var userCredential = await auth.signUpWithEmailPassword(
+        _emailController.text.trim(),
+        _pwController.text.trim(),
+      );
+
+      // now, update the document with the username
+      if (userCredential.user != null) {
+        await FirebaseFirestore.instance
+            .collection('Users')
+            .doc(userCredential.user!.uid)
+            .set({
+          // use set with merge:true to update the doc without overwriting
+          'username': _usernameController.text.trim(),
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      _showErrorDialog(context, "Registration Failed", e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showErrorDialog(BuildContext context, String title, String message) {
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -82,57 +147,54 @@ class _RegisterPageState extends State<RegisterPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.message,
+                Icons.mail_lock_rounded,
                 size: 60,
                 color: theme.colorScheme.primary,
               ),
-              const SizedBox(height: 50),
-
+              const SizedBox(height: 10),
               Text(
-                "Let's create an account for you",
-                style: theme.textTheme.bodyMedium?.copyWith(
+                "Let's create an account for you!",
+                style: TextStyle(
+                  color: theme.colorScheme.primary,
                   fontSize: 16,
-                  color: theme.colorScheme.onBackground,
                 ),
               ),
-              const SizedBox(height: 25),
-
+              const SizedBox(height: 40),
               MyTextfield(
                 hintText: "Email",
                 obscureText: false,
                 controller: _emailController,
               ),
               const SizedBox(height: 10),
-
               MyTextfield(
                 hintText: "Username",
                 obscureText: false,
                 controller: _usernameController,
               ),
               const SizedBox(height: 10),
-
               MyTextfield(
                 hintText: "Password",
                 obscureText: true,
                 controller: _pwController,
               ),
               const SizedBox(height: 10),
-
-              MyTextfield(
-                hintText: "Confirm password",
-                obscureText: true,
-                controller: _confirmPwController,
-              ),
-              const SizedBox(height: 25),
-
-              MyButton(
+              if (_showConfirmPw) ...[
+                MyTextfield(
+                  hintText: "Confirm password",
+                  obscureText: true,
+                  controller: _confirmPwController,
+                ),
+                const SizedBox(height: 20),
+              ],
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : MyButton(
                 text: "Register",
                 onTap: () => register(context),
                 backgroundColor: theme.colorScheme.primary,
                 textColor: theme.colorScheme.onPrimary,
               ),
-              const SizedBox(height: 25),
-
+              const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

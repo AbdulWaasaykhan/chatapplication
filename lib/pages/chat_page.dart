@@ -1,6 +1,6 @@
-import 'dart:io';
-import 'dart:async';  // <--- Added this import
+// filename: chat_page.dart
 
+import 'dart:io';
 import 'package:chatapplication/components/chat_bubble.dart';
 import 'package:chatapplication/components/my_textfield.dart';
 import 'package:chatapplication/services/auth/auth_service.dart';
@@ -31,38 +31,47 @@ class _ChatPageState extends State<ChatPage> {
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
 
-  bool isReceiverTyping = false;
-  bool isCurrentUserTyping = false;
-
-  // Debounce typing status update fields
-  Timer? _typingTimer;
-  bool _lastTypingStatus = false;
+  // notifier to efficiently update ui without rebuilding the whole screen
+  final ValueNotifier<bool> _isComposing = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
 
+    // handle async initialization
+    _initializeChat();
+
+    // listener to scroll down when keyboard appears
     myFocusNode.addListener(() {
       if (myFocusNode.hasFocus) {
         Future.delayed(const Duration(milliseconds: 300), () => scrollDown());
       }
     });
 
-    // Listen for typing status from the receiver
-    _chatService.getTypingStatus(widget.receiverID).listen((status) {
-      setState(() {
-        isReceiverTyping = status;
-      });
+    // this listener updates the notifier's value when text changes
+    _messageController.addListener(() {
+      _isComposing.value = _messageController.text.isNotEmpty;
     });
+  }
 
-    _chatService.markMessagesAsRead(widget.receiverID);
+  void _initializeChat() async {
+    // wait for the chat room to be created or confirmed
+    await _chatService.ensureChatRoomExists(
+      _authService.getCurrentUser()!.uid,
+      widget.receiverID,
+    );
+
+    // now that the room exists, mark messages as read
+    if (mounted) {
+      _chatService.markMessagesAsRead(widget.receiverID);
+    }
   }
 
   @override
   void dispose() {
     myFocusNode.dispose();
     _messageController.dispose();
-    _typingTimer?.cancel();  // Cancel timer on dispose
+    _isComposing.dispose(); // dispose the notifier
     super.dispose();
   }
 
@@ -78,56 +87,28 @@ class _ChatPageState extends State<ChatPage> {
 
   void sendMessage() async {
     if (_messageController.text.isNotEmpty) {
-      await _chatService.sendMessage(
-        _authService.getCurrentUser()!.uid,
-        widget.receiverID,
-        _messageController.text,
-      );
-      _messageController.clear();
-      scrollDown();
+      String messageText = _messageController.text;
+      _messageController.clear(); // clear the controller immediately for better ux
 
-      // Stop typing after sending
-      await _chatService.setTypingStatus(widget.receiverID, false);
-
-      setState(() {
-        isCurrentUserTyping = false;
-        _lastTypingStatus = false;  // reset last status
-      });
-    }
-  }
-
-  // Refined Debounced handleTyping method with print debug
-  void handleTyping() {
-    bool typingNow = _messageController.text.isNotEmpty;
-    print("handleTyping: typingNow = $typingNow, last = $_lastTypingStatus");
-
-    if (typingNow != _lastTypingStatus) {
-      print(" ➝ send typing status to backend");
-      _chatService.setTypingStatus(widget.receiverID, typingNow);
-      _lastTypingStatus = typingNow;
-    }
-
-    _typingTimer?.cancel();
-
-    if (typingNow) {
-      _typingTimer = Timer(const Duration(milliseconds: 800), () {
-        print(" ➝ timer expired, turning off typing");
-        _chatService.setTypingStatus(widget.receiverID, false);
-        _lastTypingStatus = false;
-        if (isCurrentUserTyping) {
-          print(" ➝ setState false typing");
-          setState(() {
-            isCurrentUserTyping = false;
-          });
+      try {
+        await _chatService.sendMessage(
+          _authService.getCurrentUser()!.uid,
+          widget.receiverID,
+          messageText, // use the stored message text
+        );
+        scrollDown();
+      } catch (e) {
+        // if sending fails, show an error message and restore the text
+        if (mounted) {
+          _messageController.text = messageText; // put the text back
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Couldn't send message. Please check your connection."),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
-      });
-    }
-
-    if (typingNow != isCurrentUserTyping) {
-      print(" ➝ setState typing change: $typingNow");
-      setState(() {
-        isCurrentUserTyping = typingNow;
-      });
+      }
     }
   }
 
@@ -135,14 +116,14 @@ class _ChatPageState extends State<ChatPage> {
     final pickedFile = await (isVideo
         ? _picker.pickVideo(source: ImageSource.gallery)
         : _picker.pickImage(source: ImageSource.gallery));
-
     if (pickedFile != null) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+      }
       try {
         await _chatService.sendMediaMessage(
           _authService.getCurrentUser()!.uid,
@@ -151,11 +132,13 @@ class _ChatPageState extends State<ChatPage> {
           isVideo ? "video" : "image",
         );
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Upload failed: $e")),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Upload failed: $e")),
+          );
+        }
       } finally {
-        Navigator.of(context).pop();
+        if (mounted) Navigator.of(context).pop();
         scrollDown();
       }
     }
@@ -168,12 +151,8 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: Text(getUsernameFromEmail(widget.receiverEmail)),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.grey,
-        elevation: 0,
       ),
       body: Column(
         children: [
@@ -186,7 +165,6 @@ class _ChatPageState extends State<ChatPage> {
 
   Widget _buildMessageList() {
     String senderID = _authService.getCurrentUser()!.uid;
-
     return StreamBuilder<QuerySnapshot>(
       stream: _chatService.getMessages(senderID, widget.receiverID),
       builder: (context, snapshot) {
@@ -196,90 +174,29 @@ class _ChatPageState extends State<ChatPage> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          // If no messages, still show typing indicator if typing
-          return ListView(
-            controller: _scrollController,
-            children: _buildTypingIndicators(),
-          );
-        }
-
-        final docs = snapshot.data!.docs;
-
-        // Combine messages and typing indicators in one list
-        List<Widget> items = docs.map((doc) => _buildMessageItem(doc)).toList();
-
-        // Add typing indicators at the end of the list
-        items.addAll(_buildTypingIndicators());
-
         WidgetsBinding.instance.addPostFrameCallback((_) => scrollDown());
-
-        return ListView(
+        final docs = snapshot.data!.docs;
+        return ListView.builder(
           controller: _scrollController,
-          children: items,
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            return _buildMessageItem(docs[index]);
+          },
         );
       },
     );
   }
 
-  List<Widget> _buildTypingIndicators() {
-    List<Widget> indicators = [];
-
-    if (isReceiverTyping) {
-      indicators.add(
-        Container(
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              TypingIndicator(),
-              SizedBox(width: 8),
-              Text(
-                "Typing...",
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (isCurrentUserTyping) {
-      indicators.add(
-        Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text(
-                "Typing...",
-                style: TextStyle(color: Colors.grey),
-              ),
-              SizedBox(width: 8),
-              TypingIndicator(),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return indicators;
-  }
-
   Widget _buildMessageItem(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     bool isCurrentUser = data['senderID'] == _authService.getCurrentUser()!.uid;
-    var alignment = isCurrentUser ? Alignment.centerRight : Alignment.centerLeft;
-
+    var alignment =
+    isCurrentUser ? Alignment.centerRight : Alignment.centerLeft;
     if (!data['read'] && !isCurrentUser) {
       _chatService.markMessageAsRead(doc.id, widget.receiverID);
     }
-
     return Container(
       alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ChatBubble(
         message: data,
         isCurrentUser: isCurrentUser,
@@ -289,128 +206,88 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildUserInput() {
+    final colorScheme = Theme.of(context).colorScheme;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+        padding: const EdgeInsets.all(8.0),
         child: Row(
           children: [
-            IconButton(
-              icon: const Icon(Icons.photo, color: Color.fromRGBO(7, 71, 190, 1)),
-              onPressed: () => sendMedia(false),
+            // this builder hides the plus button when composing
+            ValueListenableBuilder<bool>(
+              valueListenable: _isComposing,
+              builder: (context, isComposingValue, child) {
+                // only show the plus button when not typing
+                return isComposingValue
+                    ? const SizedBox.shrink() // hide when typing
+                    : PopupMenuButton<String>(
+                  icon: Icon(Icons.add, color: colorScheme.primary),
+                  onSelected: (value) {
+                    if (value == 'photo') {
+                      sendMedia(false);
+                    } else if (value == 'video') {
+                      sendMedia(true);
+                    }
+                  },
+                  itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<String>>[
+                    const PopupMenuItem<String>(
+                      value: 'photo',
+                      child: Row(
+                        children: [
+                          Icon(Icons.photo),
+                          SizedBox(width: 8),
+                          Text('Photo'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'video',
+                      child: Row(
+                        children: [
+                          Icon(Icons.videocam),
+                          SizedBox(width: 8),
+                          Text('Video'),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
-            IconButton(
-              icon: const Icon(Icons.videocam, color: Color.fromRGBO(7, 86, 233, 1)),
-              onPressed: () => sendMedia(true),
-            ),
+
+            // textfield
             Expanded(
               child: MyTextfield(
                 controller: _messageController,
                 hintText: "Type a message",
                 obscureText: false,
                 focusNode: myFocusNode,
-                onChanged: (_) => handleTyping(),
               ),
             ),
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              margin: const EdgeInsets.only(right: 8),
-              child: IconButton(
-                onPressed: sendMessage,
-                icon: const Icon(Icons.arrow_upward, color: Color.fromARGB(255, 110, 110, 110)),
-              ),
+
+            // send button builder
+            ValueListenableBuilder<bool>(
+              valueListenable: _isComposing,
+              builder: (context, isComposingValue, child) {
+                // only show the send button when typing
+                return isComposingValue
+                    ? Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    onPressed: sendMessage,
+                    icon: Icon(Icons.arrow_upward,
+                        color: colorScheme.onPrimary),
+                  ),
+                )
+                    : const SizedBox.shrink(); // hide when not typing
+              },
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// Simple typing indicator widget (3 bouncing dots)
-class TypingIndicator extends StatefulWidget {
-  const TypingIndicator({super.key});
-
-  @override
-  State<TypingIndicator> createState() => _TypingIndicatorState();
-}
-
-class _TypingIndicatorState extends State<TypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _dotOneAnimation;
-  late Animation<double> _dotTwoAnimation;
-  late Animation<double> _dotThreeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-
-    _dotOneAnimation = Tween<double>(begin: 0.2, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeInOut),
-      ),
-    );
-
-    _dotTwoAnimation = Tween<double>(begin: 0.2, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.2, 0.8, curve: Curves.easeInOut),
-      ),
-    );
-
-    _dotThreeAnimation = Tween<double>(begin: 0.2, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.4, 1.0, curve: Curves.easeInOut),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    double dotSize = 8;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FadeTransition(
-          opacity: _dotOneAnimation,
-          child: _buildDot(dotSize),
-        ),
-        const SizedBox(width: 4),
-        FadeTransition(
-          opacity: _dotTwoAnimation,
-          child: _buildDot(dotSize),
-        ),
-        const SizedBox(width: 4),
-        FadeTransition(
-          opacity: _dotThreeAnimation,
-          child: _buildDot(dotSize),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDot(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: const BoxDecoration(
-        color: Color.fromARGB(255, 126, 125, 125),
-        shape: BoxShape.circle,
       ),
     );
   }

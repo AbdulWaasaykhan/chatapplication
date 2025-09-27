@@ -10,27 +10,25 @@ class UserTile extends StatelessWidget {
     required this.onTap,
   });
 
-    @override
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    // using listtile for a standard, clean look
+    return ListTile(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.secondary,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 25),
-        padding: EdgeInsets.all(20),
-        child: Row(
-          children: [
-            // icon
-           const Icon(Icons.person),
-
-            const SizedBox(width: 20),
-
-            // user name
-            Text(text),
-          ],
+      contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      // leading widget is a styled circle avatar
+      leading: CircleAvatar(
+        radius: 24,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        child: const Icon(Icons.person, size: 28),
+      ),
+      // title is the user's name
+      title: Text(
+        text,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
         ),
       ),
     );

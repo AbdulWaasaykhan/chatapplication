@@ -21,11 +21,11 @@ class MyButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 25),
+        margin: const EdgeInsets.symmetric(horizontal: 0),
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: backgroundColor ?? theme.colorScheme.primary,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.2),

@@ -6,13 +6,13 @@ import 'package:video_player/video_player.dart';
 class ChatBubble extends StatelessWidget {
   final Map<String, dynamic> message;
   final bool isCurrentUser;
-  final bool isRead;  // <-- New parameter for read receipt
+  final bool isRead;
 
   const ChatBubble({
     super.key,
     required this.message,
     required this.isCurrentUser,
-    this.isRead = false,  // default false if not provided
+    this.isRead = false,
   });
 
   @override
@@ -20,54 +20,96 @@ class ChatBubble extends StatelessWidget {
     final isDarkMode =
         Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
 
-    // bubble color
-    final bubbleColor = isCurrentUser
-        ? (isDarkMode ? Colors.grey.shade700 : Colors.green.shade500)
-        : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200);
+    // define gradients, shadow, and radius for a modern look
+    final userGradient = isDarkMode
+        ? const LinearGradient(
+      colors: [Color(0xFF1C1C1C), Color(0xFF171717)], // deep purple
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    )
+        : const LinearGradient(
+      colors: [Color(0xFF0B0B0B), Color(0xFF070707)], // vibrant blue
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
 
-    // chat bubble radius
+    final otherGradient = isDarkMode
+        ? LinearGradient(
+      colors: [Colors.grey.shade800, Colors.grey.shade700],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    )
+        : LinearGradient(
+      colors: [Colors.grey.shade200, Colors.grey.shade100],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+
+    final shadow = [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.2),
+        blurRadius: 5.0,
+        offset: const Offset(0, 2),
+      )
+    ];
+
     final radius = isCurrentUser
         ? const BorderRadius.only(
-            topLeft: Radius.circular(14),
-            topRight: Radius.circular(14),
-            bottomLeft: Radius.circular(14),
-          )
+      topLeft: Radius.circular(18),
+      topRight: Radius.circular(18),
+      bottomLeft: Radius.circular(18),
+    )
         : const BorderRadius.only(
-            topLeft: Radius.circular(14),
-            topRight: Radius.circular(14),
-            bottomRight: Radius.circular(14),
-          );
+      topLeft: Radius.circular(18),
+      topRight: Radius.circular(18),
+      bottomRight: Radius.circular(18),
+    );
 
     return Align(
       alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
+        // use the new decoration
         decoration: BoxDecoration(
-          color: bubbleColor,
+          gradient: isCurrentUser ? userGradient : otherGradient,
           borderRadius: radius,
+          boxShadow: shadow,
         ),
-        padding: const EdgeInsets.all(10),
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
         child: Column(
           crossAxisAlignment:
-              isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildMessageContent(context, isDarkMode),
-            if (isCurrentUser)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0, right: 4.0),
-                child: Text(
-                  isRead ? "✓✓ Read" : "✓ Sent",
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: isRead
-                        ? Colors.blueAccent
-                        : (isDarkMode ? Colors.white54 : Colors.black45),
-                  ),
-                ),
-              ),
+            if (isCurrentUser) _buildReadReceipt(isDarkMode),
           ],
         ),
+      ),
+    );
+  }
+
+  // upgraded read receipt with icons
+  Widget _buildReadReceipt(bool isDarkMode) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 5.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            isRead ? "Read" : "Sent",
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.white.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            isRead ? Icons.done_all : Icons.done,
+            size: 14,
+            color: isRead ? Colors.lightBlueAccent : Colors.white.withValues(alpha: 0.7),
+          ),
+        ],
       ),
     );
   }
@@ -81,7 +123,7 @@ class ChatBubble extends StatelessWidget {
         return Text(
           message["message"] ?? "",
           style: TextStyle(
-            fontSize: 15,
+            fontSize: 16,
             color: isCurrentUser
                 ? Colors.white
                 : (isDarkMode ? Colors.white : Colors.black87),
@@ -97,7 +139,7 @@ class ChatBubble extends StatelessWidget {
             showDialog(
               context: context,
               builder: (_) => Dialog(
-                backgroundColor: Colors.black,
+                backgroundColor: Colors.transparent,
                 insetPadding: const EdgeInsets.all(8),
                 child: InteractiveViewer(
                   child: Image.network(mediaUrl),
@@ -106,22 +148,22 @@ class ChatBubble extends StatelessWidget {
             );
           },
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             child: Image.network(
               mediaUrl,
               width: 220,
               height: 220,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) =>
-                  const Icon(Icons.broken_image, size: 50, color: Colors.red),
+              const Icon(Icons.broken_image, size: 50, color: Colors.red),
               loadingBuilder: (context, child, loadingProgress) =>
-                  loadingProgress == null
-                      ? child
-                      : const SizedBox(
-                          width: 220,
-                          height: 220,
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
+              loadingProgress == null
+                  ? child
+                  : const SizedBox(
+                width: 220,
+                height: 220,
+                child: Center(child: CircularProgressIndicator()),
+              ),
             ),
           ),
         );
@@ -178,7 +220,9 @@ class _VideoPlayerBubbleState extends State<VideoPlayerBubble> {
   @override
   Widget build(BuildContext context) {
     if (_hasError) {
-      return const Center(child: Text("⚠ Failed to load video"));
+      return const Center(
+          child: Text("⚠ Failed to load video",
+              style: TextStyle(color: Colors.white)));
     }
 
     if (_isLoading) {
@@ -186,31 +230,43 @@ class _VideoPlayerBubbleState extends State<VideoPlayerBubble> {
     }
 
     if (!_controller.value.isInitialized) {
-      return const Center(child: Text("⚠ Video not initialized"));
+      return const Center(
+          child: Text("⚠ Video not initialized",
+              style: TextStyle(color: Colors.white)));
     }
 
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        AspectRatio(
-          aspectRatio: _controller.value.aspectRatio,
-          child: VideoPlayer(_controller),
-        ),
-        IconButton(
-          icon: Icon(
-            _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-            color: Colors.white,
-            size: 40,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
           ),
-          onPressed: () {
-            setState(() {
-              _controller.value.isPlaying
-                  ? _controller.pause()
-                  : _controller.play();
-            });
-          },
-        ),
-      ],
+          // scrim
+          Container(color: Colors.black.withValues(alpha: 0.1)),
+          // play/pause button
+          IconButton(
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withValues(alpha: 0.4),
+              shape: const CircleBorder(),
+            ),
+            icon: Icon(
+              _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+              color: Colors.white,
+              size: 40,
+            ),
+            onPressed: () {
+              setState(() {
+                _controller.value.isPlaying
+                    ? _controller.pause()
+                    : _controller.play();
+              });
+            },
+          ),
+        ],
+      ),
     );
   }
 }

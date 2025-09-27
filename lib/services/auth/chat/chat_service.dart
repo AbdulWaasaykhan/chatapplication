@@ -9,41 +9,32 @@ class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final SupabaseClient _supabase = Supabase.instance.client;
+  final Logger _logger = Logger();
 
-  // ---------------------- TYPING STATUS ----------------------
-
-  /// Get the chatroom ID by sorting user IDs
+  // get the chatroom id by sorting user ids to ensure consistency
   String getChatroomID(String user1, String user2) {
     List<String> ids = [user1, user2];
     ids.sort();
     return ids.join('_');
   }
 
-  /// Listen to typing status of the other user inside the chatroom
-  Stream<bool> getTypingStatus(String otherUserID) {
-    final String currentUserID = _auth.currentUser!.uid;
-    final String chatroomID = getChatroomID(currentUserID, otherUserID);
+  // helper to ensure the chat room document exists
+  Future<void> ensureChatRoomExists(String senderID, String receiverID) async {
+    String chatroomID = getChatroomID(senderID, receiverID);
+    final chatRoomDocRef = _firestore.collection("chat_rooms").doc(chatroomID);
+    final docSnapshot = await chatRoomDocRef.get();
 
-    return _firestore.collection('typing_status').doc(chatroomID).snapshots().map((snapshot) {
-      if (!snapshot.exists) return false;
-      Map<String, dynamic> data = snapshot.data() ?? {};
-      return data[otherUserID] ?? false;
-    });
+    if (!docSnapshot.exists) {
+      await chatRoomDocRef.set({
+        'participants': [senderID, receiverID],
+        'last_message_timestamp': Timestamp.now(),
+      });
+    }
   }
 
-  /// Set typing status of current user inside the chatroom
-  Future<void> setTypingStatus(String otherUserID, bool isTyping) async {
-    final String currentUserID = _auth.currentUser!.uid;
-    final String chatroomID = getChatroomID(currentUserID, otherUserID);
+  // --- READ RECEIPTS ---
 
-    await _firestore.collection('typing_status').doc(chatroomID).set({
-      currentUserID: isTyping,
-      'timestamp': Timestamp.now(),
-    }, SetOptions(merge: true));
-  }
-
-  // ---------------------- READ RECEIPTS ----------------------
-
+  // mark a single message as read
   Future<void> markMessageAsRead(String messageID, String receiverID) async {
     String senderID = _auth.currentUser!.uid;
     String chatroomID = getChatroomID(senderID, receiverID);
@@ -56,6 +47,7 @@ class ChatService {
         .update({'read': true});
   }
 
+  // mark all unread messages from the other user as read
   Future<void> markMessagesAsRead(String receiverID) async {
     String senderID = _auth.currentUser!.uid;
     String chatroomID = getChatroomID(senderID, receiverID);
@@ -64,22 +56,25 @@ class ChatService {
         .collection('chat_rooms')
         .doc(chatroomID)
         .collection('messages')
-        .where('senderID', isNotEqualTo: senderID)
+        .where('senderID', isEqualTo: receiverID)
         .where('read', isEqualTo: false)
         .get();
 
+    WriteBatch batch = _firestore.batch();
     for (var doc in messages.docs) {
-      await doc.reference.update({'read': true});
+      batch.update(doc.reference, {'read': true});
     }
+    await batch.commit();
   }
 
-  // ---------------------- MESSAGES ----------------------
+  // --- MESSAGES ---
 
+  // send a text message
   Future<void> sendMessage(
-    String senderID,
-    String receiverID,
-    String message,
-  ) async {
+      String senderID,
+      String receiverID,
+      String message,
+      ) async {
     final String currentUserEmail = _auth.currentUser!.email!;
     final Timestamp timestamp = Timestamp.now();
 
@@ -96,6 +91,9 @@ class ChatService {
 
     String chatroomID = getChatroomID(senderID, receiverID);
 
+    // ensure chat room exists with participants before sending a message
+    await ensureChatRoomExists(senderID, receiverID);
+
     await _firestore
         .collection("chat_rooms")
         .doc(chatroomID)
@@ -103,21 +101,24 @@ class ChatService {
         .add(newMessage.toMap());
   }
 
+  // send a media message (image or video)
   Future<void> sendMediaMessage(
-    String senderID,
-    String receiverID,
-    File file,
-    String type,
-  ) async {
+      String senderID,
+      String receiverID,
+      File file,
+      String type,
+      ) async {
     final String currentUserEmail = _auth.currentUser!.email!;
     final Timestamp timestamp = Timestamp.now();
-    final Logger logger = Logger();
 
     try {
       final fileExt = file.path.split('.').last;
       final fileName = "${DateTime.now().millisecondsSinceEpoch}.$fileExt";
-
       String chatroomID = getChatroomID(senderID, receiverID);
+
+      // ensure chat room exists with participants before sending media
+      await ensureChatRoomExists(senderID, receiverID);
+
       final String filePath = "$chatroomID/$fileName";
 
       await _supabase.storage.from('chat_media').upload(
@@ -127,13 +128,13 @@ class ChatService {
       );
 
       final String publicUrl =
-          _supabase.storage.from('chat_media').getPublicUrl(filePath);
+      _supabase.storage.from('chat_media').getPublicUrl(filePath);
 
       Message newMessage = Message(
         senderID: senderID,
         senderEmail: currentUserEmail,
         receiverID: receiverID,
-        message: "",
+        message: "", // message is empty for media
         type: type,
         mediaUrl: publicUrl,
         timestamp: timestamp,
@@ -146,11 +147,12 @@ class ChatService {
           .collection("messages")
           .add(newMessage.toMap());
     } catch (e, st) {
-      logger.e('sendMediaMessage failed: $e', error: e, stackTrace: st);
+      _logger.e('sendMediaMessage failed: $e', error: e, stackTrace: st);
       rethrow;
     }
   }
 
+  // get a stream of messages for a given chat room
   Stream<QuerySnapshot> getMessages(String userID, String otherUserID) {
     String chatRoomID = getChatroomID(userID, otherUserID);
 
@@ -162,9 +164,13 @@ class ChatService {
         .snapshots();
   }
 
+  // get a stream of all users
   Stream<List<Map<String, dynamic>>> getUserStream() {
     return _firestore.collection("Users").snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => doc.data()).toList();
+      return snapshot.docs.map((doc) {
+        final user = doc.data();
+        return user;
+      }).toList();
     });
   }
 }

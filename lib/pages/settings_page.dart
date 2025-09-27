@@ -8,37 +8,56 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // get access to the theme provider and color scheme
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        title: const Text("Settings"),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.grey,
-        elevation: 0,
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.secondary,
-        ),
-        margin: const EdgeInsets.all(0),
-        padding: const EdgeInsets.all(18),
+      // scaffold background is now handled by the theme
+      body: Padding(
+        // add some padding around the main column
+        padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 16),
         child: Column(
           children: [
-            // Dark Mode
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Dark Mode"),
-                CupertinoSwitch(
+            // a styled container for the dark mode setting
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+              decoration: BoxDecoration(
+                // use the surface color from the theme
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                // remove the default padding of listtile
+                contentPadding: EdgeInsets.zero,
+                // leading icon for the setting
+                leading: Icon(
+                  Icons.dark_mode_outlined,
+                  // use the onSurface color from the theme for icons/text
+                  color: colorScheme.onSurface,
+                ),
+                // title of the setting
+                title: Text(
+                  "Dark Mode",
+                  style: TextStyle(
+                    // use the onSurface color from the theme
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                  ),
+                ),
+                // the switch is the trailing widget
+                trailing: CupertinoSwitch(
                   value: themeProvider.isDarkMode,
                   onChanged: (value) => themeProvider.toggleTheme(),
+                  // use the primary theme color for the active switch
+                  activeColor: colorScheme.primary,
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 20),
 
+            // you can add more settings here following the same pattern
           ],
         ),
       ),

@@ -1,5 +1,5 @@
 name: chatapplication
-description: "A new Flutter project."
+description: "Secure Chat App"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -44,7 +44,7 @@ dependencies:
   image_picker: ^1.1.2
   video_player: ^2.9.2
   supabase_flutter: ^2.5.0
-  shared_preferences: ^2.3.2
+  shared_preferences: ^2.0.0
   logger: ^2.6.1
   
 
