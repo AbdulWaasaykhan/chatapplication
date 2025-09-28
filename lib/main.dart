@@ -10,8 +10,9 @@ import 'package:provider/provider.dart';
 import 'package:chatapplication/themes/theme_provider.dart';
 import 'package:logger/logger.dart';
 
-final Logger logger = Logger();
+import 'package:firebase_app_check/firebase_app_check.dart';
 
+final Logger logger = Logger();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,10 @@ void main() async {
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug,
+      appleProvider: AppleProvider.debug,
     );
     logger.d('[DEBUG] Firebase initialized.');
   } catch (e) {

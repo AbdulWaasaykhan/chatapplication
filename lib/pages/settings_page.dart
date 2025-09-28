@@ -1,3 +1,4 @@
+import 'package:chatapplication/services/auth/auth_service.dart';
 import 'package:chatapplication/themes/theme_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,8 @@ class SettingsPage extends StatelessWidget {
           children: [
             // a styled container for the dark mode setting
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+              padding:
+              const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
               decoration: BoxDecoration(
                 // use the surface color from the theme
                 color: colorScheme.surface,
@@ -33,14 +35,14 @@ class SettingsPage extends StatelessWidget {
                 // leading icon for the setting
                 leading: Icon(
                   Icons.dark_mode_outlined,
-                  // use the onSurface color from the theme for icons/text
+                  // use the onsurface color from the theme for icons/text
                   color: colorScheme.onSurface,
                 ),
                 // title of the setting
                 title: Text(
                   "Dark Mode",
                   style: TextStyle(
-                    // use the onSurface color from the theme
+                    // use the onsurface color from the theme
                     color: colorScheme.onSurface,
                     fontWeight: FontWeight.w500,
                     fontSize: 16,
@@ -55,9 +57,37 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
-            // you can add more settings here following the same pattern
+            // logout button
+            Container(
+              padding:
+              const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  Icons.logout,
+                  color: colorScheme.onSurface,
+                ),
+                title: Text(
+                  "Logout",
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                  ),
+                ),
+                onTap: () {
+                  // call sign out method from auth service
+                  final authService = AuthService();
+                  authService.signOut();
+                },
+              ),
+            ),
           ],
         ),
       ),

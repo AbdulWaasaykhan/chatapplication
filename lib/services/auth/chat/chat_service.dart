@@ -32,6 +32,19 @@ class ChatService {
     }
   }
 
+  // search users
+  Future<List<Map<String, dynamic>>> searchUsers(String query) async {
+    if (query.isEmpty) {
+      return [];
+    }
+    final result = await _firestore
+        .collection('Users')
+        .where('email', isEqualTo: query)
+        .get();
+
+    return result.docs.map((doc) => doc.data()).toList();
+  }
+
   // --- READ RECEIPTS ---
 
   // mark a single message as read

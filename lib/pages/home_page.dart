@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../components/my_popup.dart';
 import '../components/navbar.dart';
 import '../components/user_tile.dart';
 import '../pages/settings_page.dart';
@@ -18,9 +17,20 @@ class _HomePageState extends State<HomePage> {
   // services
   final ChatService _chatService = ChatService();
   final AuthService _authService = AuthService();
+  final TextEditingController _searchController = TextEditingController();
 
-  // index for the navbar
-  int _selectedIndex = 0;
+  // state
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _isLoading = false;
+  int _selectedIndex = 0; // index for the navbar
+  bool _isSearching = false; // to toggle search bar in appbar
+
+  // dispose controller
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   // function to handle navbar tap
   void _onItemTapped(int index) {
@@ -32,119 +42,157 @@ class _HomePageState extends State<HomePage> {
   // list of pages to show
   List<Widget> get _pages => [
     // chats page (index 0)
-    _buildUserList(),
+    _buildChatsPage(),
     // settings page (index 1)
     const SettingsPage(),
   ];
 
+  void _searchUsers(String query) async {
+    // only search if the query is not empty
+    if (query.trim().isNotEmpty) {
+      setState(() {
+        _isLoading = true;
+      });
+      final results = await _chatService.searchUsers(query);
+      setState(() {
+        _searchResults = results;
+        _isLoading = false;
+      });
+    } else {
+      // clear results if query is empty
+      setState(() {
+        _searchResults = [];
+      });
+    }
+  }
+
+  void _startSearch() {
+    setState(() {
+      _isSearching = true;
+    });
+  }
+
+  void _stopSearch() {
+    setState(() {
+      _isSearching = false;
+      _searchController.clear();
+      _searchResults = [];
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _selectedIndex == 0 ? "Chats" : "Settings",
-          style: const TextStyle(fontWeight: FontWeight.bold),
+    // use willpopscope to override the back button when searching
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isSearching) {
+          _stopSearch();
+          return false; // prevent app from closing
+        }
+        return true; // allow app to close
+      },
+      child: Scaffold(
+        appBar: _buildAppBar(),
+        body: _pages[_selectedIndex],
+        bottomNavigationBar: Navbar(
+          currentIndex: _selectedIndex,
+          onTabTapped: _onItemTapped,
         ),
-        actions: _selectedIndex == 0
-            ? [
-          CustomPopupMenu(
-            menuItems: const [
-              PopupMenuItem<String>(
-                value: 'logout',
-                child: Text('Logout'),
-              ),
-            ],
-            onSelected: (value) {
-              if (value == 'logout') {
-                _authService.signOut();
-              }
-            },
-          ),
-        ]
-            : null,
-      ),
-      body: _pages[_selectedIndex],
-      bottomNavigationBar: Navbar(
-        currentIndex: _selectedIndex,
-        onTabTapped: _onItemTapped,
       ),
     );
   }
 
-  // user list method with improved empty state
-  Widget _buildUserList() {
-    return StreamBuilder(
-      stream: _chatService.getUserStream(),
-      builder: (context, snapshot) {
-        // error state
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.error_outline,
-                  color: Theme.of(context).colorScheme.error,
-                  size: 48,
-                ),
-                const SizedBox(height: 8),
-                const Text("Something went wrong."),
-              ],
+  // build the appbar based on the selected index and search state
+  AppBar _buildAppBar() {
+    // settings page appbar
+    if (_selectedIndex == 1) {
+      return AppBar(
+        title: const Text(
+          "Settings",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+
+    // chats page appbar (with search logic)
+    if (_isSearching) {
+      // search appbar
+      return AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _stopSearch,
+        ),
+        title: TextField(
+          controller: _searchController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Search for users by email...',
+            // updated border and padding
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
             ),
-          );
-        }
-
-        // loading state
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
-
-        // filter out the current user from the list
-        final currentUser = _authService.getCurrentUser();
-        final users = snapshot.data!
-            .where((userData) => userData['email'] != currentUser!.email)
-            .toList();
-
-        // improved empty state
-        if (users.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.people_outline,
-                  size: 60,
-                  color: Colors.grey.shade500,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "No one to chat with yet",
-                  style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // use listview.separated to show a divider between items
-        return ListView.separated(
-          itemCount: users.length,
-          itemBuilder: (context, index) {
-            return _buildUserListItem(users[index], context);
-          },
-          // this builds a theme-aware separator
-          separatorBuilder: (context, index) => Divider(
-            color: Theme.of(context).dividerColor,
-            thickness: 0.3,
+            filled: true,
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           ),
-        );
+          onSubmitted: _searchUsers,
+        ),
+      );
+    } else {
+      // normal appbar
+      return AppBar(
+        title: const Text(
+          "Chats",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: _startSearch,
+          ),
+        ],
+      );
+    }
+  }
+
+  // build the main content for the chats page
+  Widget _buildChatsPage() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // prompt user to search if the search bar is not active
+    if (_searchController.text.isEmpty && !_isSearching) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(25.0),
+          child: Text(
+            "Tap the search icon 🔎 to find and chat with other users.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      );
+    }
+
+    // show message if no users are found
+    if (_searchResults.isEmpty && _searchController.text.isNotEmpty) {
+      return const Center(
+        child: Text("No users found."),
+      );
+    }
+
+    // display search results
+    return ListView.builder(
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        return _buildUserListItem(_searchResults[index], context);
       },
     );
   }
 
-  // this widget now only builds the tile
+  // build a single user list item
   Widget _buildUserListItem(
       Map<String, dynamic> userData, BuildContext context) {
     return UserTile(
