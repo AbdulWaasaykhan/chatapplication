@@ -1,3 +1,5 @@
+// filename: chat_service.dart
+
 import 'dart:io';
 import 'package:chatapplication/models/message.dart';
 import 'package:chatapplication/models/user_model.dart';
@@ -35,18 +37,18 @@ class ChatService {
   }
 
   // helper to update the last message in the chat room document
+  // NOTE: This message is used for the recent chats list (and by the Cloud Function)
   Future<void> _updateLastMessage(
       String chatroomID, String message, String senderID) async {
     await _firestore.collection("chat_rooms").doc(chatroomID).update({
-      'last_message': message,
+      'last_message': message, 
       'last_message_sender_id': senderID,
       'last_message_timestamp': Timestamp.now(),
     });
   }
-
-  // --- SEARCH USERS ---
+  
+  // --- SEARCH USERS (UNCHANGED) ---
   Future<List<UserModel>> searchUsers(String query) async {
-    // ... (no changes in this method)
     if (query.trim().isEmpty) {
       return [];
     }
@@ -64,9 +66,8 @@ class ChatService {
     }
   }
 
-  // mark a single message as read
+  // mark a single message as read (UNCHANGED)
   Future<void> markMessageAsRead(String messageID, String receiverID) async {
-    // ... (no changes in this method)
     String senderID = _auth.currentUser!.uid;
     String chatroomID = getChatroomID(senderID, receiverID);
 
@@ -78,9 +79,8 @@ class ChatService {
         .update({'read': true});
   }
 
-  // mark all unread messages from the other user as read
+  // mark all unread messages from the other user as read (UNCHANGED)
   Future<void> markMessagesAsRead(String receiverID) async {
-    // ... (no changes in this method)
     String senderID = _auth.currentUser!.uid;
     String chatroomID = getChatroomID(senderID, receiverID);
 
@@ -99,16 +99,24 @@ class ChatService {
     await batch.commit();
   }
 
-  // --- MESSAGES ---
+  // --- MESSAGES (UPDATED for Self-Destruct & Secure Notifs) ---
 
   // send a text message
   Future<void> sendMessage(
       String senderID,
       String receiverID,
       String message,
+      {Duration? destructionDuration} // <-- NEW PARAMETER
       ) async {
     final String currentUserEmail = _auth.currentUser!.email!;
     final Timestamp timestamp = Timestamp.now();
+
+    // 1. CALCULATE DESTRUCTION TIME
+    Timestamp? destructionTime = destructionDuration != null
+        ? Timestamp.fromMillisecondsSinceEpoch(
+            timestamp.millisecondsSinceEpoch + destructionDuration.inMilliseconds,
+          )
+        : null;
 
     Message newMessage = Message(
       senderID: senderID,
@@ -119,11 +127,11 @@ class ChatService {
       mediaUrl: null,
       timestamp: timestamp,
       read: false,
+      destructionTime: destructionTime, // <-- SAVE NEW FIELD
     );
 
     String chatroomID = getChatroomID(senderID, receiverID);
 
-    // ensure chat room exists with participants before sending a message
     await ensureChatRoomExists(senderID, receiverID);
 
     await _firestore
@@ -131,8 +139,10 @@ class ChatService {
         .doc(chatroomID)
         .collection("messages")
         .add(newMessage.toMap());
-    // update the last message
-    await _updateLastMessage(chatroomID, message, senderID);
+
+    // 2. SECURE NOTIFICATION: Use generic placeholder for last message in chat room
+    String messagePreview = destructionTime != null ? "Self-destructing message" : message;
+    await _updateLastMessage(chatroomID, messagePreview, senderID);
   }
 
   // send a media message (image or video)
@@ -141,28 +151,35 @@ class ChatService {
       String receiverID,
       File file,
       String type,
+      {Duration? destructionDuration} // <-- NEW PARAMETER
       ) async {
     final String currentUserEmail = _auth.currentUser!.email!;
     final Timestamp timestamp = Timestamp.now();
 
     try {
+      // 1. CALCULATE DESTRUCTION TIME
+      Timestamp? destructionTime = destructionDuration != null
+          ? Timestamp.fromMillisecondsSinceEpoch(
+              timestamp.millisecondsSinceEpoch + destructionDuration.inMilliseconds,
+            )
+          : null;
+
       final fileExt = file.path.split('.').last;
       final fileName = "${DateTime.now().millisecondsSinceEpoch}.$fileExt";
       String chatroomID = getChatroomID(senderID, receiverID);
 
-      // ensure chat room exists with participants before sending media
       await ensureChatRoomExists(senderID, receiverID);
 
       final String filePath = "$chatroomID/$fileName";
 
       await _supabase.storage.from('chat_media').upload(
-        filePath,
-        file,
-        fileOptions: const FileOptions(upsert: true),
-      );
+            filePath,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
 
       final String publicUrl =
-      _supabase.storage.from('chat_media').getPublicUrl(filePath);
+          _supabase.storage.from('chat_media').getPublicUrl(filePath);
 
       Message newMessage = Message(
         senderID: senderID,
@@ -173,6 +190,7 @@ class ChatService {
         mediaUrl: publicUrl,
         timestamp: timestamp,
         read: false,
+        destructionTime: destructionTime, // <-- SAVE NEW FIELD
       );
 
       await _firestore
@@ -181,18 +199,20 @@ class ChatService {
           .collection("messages")
           .add(newMessage.toMap());
 
-      // update last message for media
-      String messageText = (type == 'image') ? "📷 Photo" : "📹 Video";
-      await _updateLastMessage(chatroomID, messageText, senderID);
+      // 2. SECURE NOTIFICATION: Use generic placeholder for media
+      String messagePreview = (type == 'image') ? "📷 Photo" : "📹 Video";
+      if (destructionTime != null) {
+         messagePreview = "Self-destructing $messagePreview";
+      }
+      await _updateLastMessage(chatroomID, messagePreview, senderID);
     } catch (e, st) {
       _logger.e('sendMediaMessage failed: $e', error: e, stackTrace: st);
       rethrow;
     }
   }
 
-  // get a stream of messages for a given chat room
+  // get a stream of messages for a given chat room (UNCHANGED)
   Stream<QuerySnapshot> getMessages(String userID, String otherUserID) {
-    // ... (no changes in this method)
     String chatRoomID = getChatroomID(userID, otherUserID);
 
     return _firestore
@@ -203,9 +223,8 @@ class ChatService {
         .snapshots();
   }
 
-  // get a stream of all users
+  // get a stream of all users (UNCHANGED)
   Stream<List<Map<String, dynamic>>> getUserStream() {
-    // ... (no changes in this method)
     return _firestore.collection("Users").snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
         final user = doc.data();
@@ -214,9 +233,7 @@ class ChatService {
     });
   }
 
-  // --- NEW METHODS FOR RECENT CHATS ---
-
-  // get a stream of chat rooms for the current user
+  // get a stream of chat rooms for the current user (UNCHANGED)
   Stream<QuerySnapshot<Map<String, dynamic>>> getChatRoomsStream() {
     final currentUserUID = _auth.currentUser!.uid;
     return _firestore
@@ -226,11 +243,11 @@ class ChatService {
         .snapshots();
   }
 
-  // get user data from firestore
+  // get user data from firestore (UNCHANGED)
   Future<UserModel?> getUserData(String uid) async {
     try {
       DocumentSnapshot doc =
-      await _firestore.collection('Users').doc(uid).get();
+          await _firestore.collection('Users').doc(uid).get();
       if (doc.exists) {
         return UserModel.fromMap(doc.data() as Map<String, dynamic>);
       }
@@ -240,7 +257,7 @@ class ChatService {
     return null;
   }
 
-  // soft delete a chat
+  // soft delete a chat (UNCHANGED)
   Future<void> softDeleteChat(String chatroomID) async {
     final currentUserUID = _auth.currentUser!.uid;
     await _firestore.collection('chat_rooms').doc(chatroomID).update({
