@@ -1,5 +1,3 @@
-// lib/pages/register_page.dart
-
 import 'package:chatapplication/services/auth/auth_service.dart';
 import 'package:flutter/material.dart';
 import '../components/my_button.dart';
@@ -47,10 +45,8 @@ class _RegisterPageState extends State<RegisterPage> {
   // --- CORRECTED REGISTER METHOD ---
   Future<void> register(BuildContext context) async {
     setState(() => _isLoading = true);
-
     final auth = AuthService();
 
-    // --- All your validation logic is good, no changes needed there ---
     if (_emailController.text.trim().isEmpty) {
       _showErrorDialog(context, "Email required", "Please enter an email address.");
       return;
@@ -89,23 +85,12 @@ class _RegisterPageState extends State<RegisterPage> {
         return;
       }
 
-      // create user in firebase auth (this also creates the initial document)
-      var userCredential = await auth.signUpWithEmailPassword(
+      // create user in firebase auth and firestore in one go
+      await auth.signUpWithEmailPassword(
         _emailController.text.trim(),
         _pwController.text.trim(),
+        _usernameController.text.trim(), // pass username here
       );
-
-      // now, update the document with the username
-      if (userCredential.user != null) {
-        await FirebaseFirestore.instance
-            .collection('Users')
-            .doc(userCredential.user!.uid)
-            .set({
-          // use set with merge:true to update the doc without overwriting
-          'username': _usernameController.text.trim(),
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
     } catch (e) {
       _showErrorDialog(context, "Registration Failed", e.toString());
     } finally {
@@ -116,9 +101,7 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void _showErrorDialog(BuildContext context, String title, String message) {
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+    // No need to set isLoading here anymore
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

@@ -5,7 +5,7 @@ ThemeData darkMode = ThemeData(
   colorScheme: const ColorScheme.dark(
     primary: Color(0xFFFFFFFF),      // a lighter, desaturated purple for readability
     onPrimary: Colors.black,         // text on top of the primary color
-    secondary: Color(0xFFFFD600),    // a brighter amber for accents in dark mode
+    secondary: Color(0xFF65F420),    // a brighter amber for accents in dark mode
     onSecondary: Colors.black,       // text on top of the secondary color
     surface: Color(0xFF1E1E1E),      // cards and dialogs (slightly lighter than background)
     onSurface: Color(0xFFE6E1E5),    // main text color (off-white)

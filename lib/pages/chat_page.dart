@@ -12,11 +12,13 @@ import 'package:image_picker/image_picker.dart';
 class ChatPage extends StatefulWidget {
   final String receiverEmail;
   final String receiverID;
+  final String receiverUsername;
 
   const ChatPage({
     super.key,
     required this.receiverEmail,
     required this.receiverID,
+    required this.receiverUsername,
   });
 
   @override

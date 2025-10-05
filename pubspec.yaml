@@ -46,7 +46,7 @@ dependencies:
   supabase_flutter: ^2.5.0
   shared_preferences: ^2.0.0
   logger: ^2.6.1
-  firebase_app_check: ^0.3.2+10
+  timeago: ^3.6.1
   
 
 dev_dependencies:

@@ -1,10 +1,13 @@
+import 'package:chatapplication/models/user_model.dart';
+import 'package:chatapplication/services/auth/chat/chat_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../components/navbar.dart';
 import '../components/user_tile.dart';
 import '../pages/settings_page.dart';
 import '../services/auth/auth_service.dart';
-import '../services/auth/chat/chat_service.dart';
 import 'chat_page.dart';
+import 'security_settings_page.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,57 +23,45 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchController = TextEditingController();
 
   // state
-  List<Map<String, dynamic>> _searchResults = [];
+  List<UserModel> _searchResults = [];
   bool _isLoading = false;
-  int _selectedIndex = 0; // index for the navbar
-  bool _isSearching = false; // to toggle search bar in appbar
+  int _selectedIndex = 0;
+  bool _isSearching = false;
 
-  // dispose controller
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  // function to handle navbar tap
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
 
-  // list of pages to show
   List<Widget> get _pages => [
-    // chats page (index 0)
     _buildChatsPage(),
-    // settings page (index 1)
+    const SecuritySettingsPage(),
     const SettingsPage(),
   ];
 
   void _searchUsers(String query) async {
-    // only search if the query is not empty
     if (query.trim().isNotEmpty) {
-      setState(() {
-        _isLoading = true;
-      });
+      setState(() => _isLoading = true);
       final results = await _chatService.searchUsers(query);
       setState(() {
-        _searchResults = results;
+        _searchResults = results
+            .where((user) => user.uid != _authService.getCurrentUser()!.uid)
+            .toList();
         _isLoading = false;
       });
     } else {
-      // clear results if query is empty
-      setState(() {
-        _searchResults = [];
-      });
+      setState(() => _searchResults = []);
     }
   }
 
-  void _startSearch() {
-    setState(() {
-      _isSearching = true;
-    });
-  }
+  void _startSearch() => setState(() => _isSearching = true);
 
   void _stopSearch() {
     setState(() {
@@ -82,41 +73,49 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // use willpopscope to override the back button when searching
     return WillPopScope(
       onWillPop: () async {
         if (_isSearching) {
           _stopSearch();
-          return false; // prevent app from closing
+          return false;
         }
-        return true; // allow app to close
+        return true;
       },
       child: Scaffold(
         appBar: _buildAppBar(),
-        body: _pages[_selectedIndex],
-        bottomNavigationBar: Navbar(
+        body: _isSearching
+            ? _buildSearchPage()
+            : IndexedStack(
+          index: _selectedIndex,
+          children: _pages,
+        ),
+        bottomNavigationBar: BottomNavigationBar(
           currentIndex: _selectedIndex,
-          onTabTapped: _onItemTapped,
+          onTap: _onItemTapped,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.chat_bubble_outline),
+              label: 'Chats',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.security_outlined),
+              label: 'Security',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined),
+              label: 'Settings',
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // build the appbar based on the selected index and search state
   AppBar _buildAppBar() {
-    // settings page appbar
-    if (_selectedIndex == 1) {
-      return AppBar(
-        title: const Text(
-          "Settings",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      );
-    }
+    if (_selectedIndex == 1) return AppBar(title: const Text("Security"));
+    if (_selectedIndex == 2) return AppBar(title: const Text("Settings"));
 
-    // chats page appbar (with search logic)
     if (_isSearching) {
-      // search appbar
       return AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -125,65 +124,30 @@ class _HomePageState extends State<HomePage> {
         title: TextField(
           controller: _searchController,
           autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'Search for users by email...',
-            // updated border and padding
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: const InputDecoration(
+            hintText: 'Search for users by username...',
+            border: InputBorder.none,
           ),
-          onSubmitted: _searchUsers,
+          onChanged: _searchUsers,
         ),
       );
     } else {
-      // normal appbar
       return AppBar(
-        title: const Text(
-          "Chats",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text("Chats"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: _startSearch,
-          ),
+          IconButton(icon: const Icon(Icons.search), onPressed: _startSearch),
         ],
       );
     }
   }
 
-  // build the main content for the chats page
-  Widget _buildChatsPage() {
+  Widget _buildSearchPage() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-
-    // prompt user to search if the search bar is not active
-    if (_searchController.text.isEmpty && !_isSearching) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(25.0),
-          child: Text(
-            "Tap the search icon 🔎 to find and chat with other users.",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-      );
-    }
-
-    // show message if no users are found
     if (_searchResults.isEmpty && _searchController.text.isNotEmpty) {
-      return const Center(
-        child: Text("No users found."),
-      );
+      return const Center(child: Text("No users found."));
     }
-
-    // display search results
     return ListView.builder(
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
@@ -192,18 +156,123 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // build a single user list item
-  Widget _buildUserListItem(
-      Map<String, dynamic> userData, BuildContext context) {
+  Widget _buildChatsPage() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _chatService.getChatRoomsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(child: Text("Something went wrong."));
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.data == null || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(25.0),
+              child: Text(
+                "No chats yet. Tap the search icon to start a conversation.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          );
+        }
+
+        final chatDocs = snapshot.data!.docs;
+
+        return ListView.builder(
+          itemCount: chatDocs.length,
+          itemBuilder: (context, index) {
+            return _buildChatListItem(chatDocs[index]);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildChatListItem(DocumentSnapshot<Map<String, dynamic>> chatDoc) {
+    final chatData = chatDoc.data()!;
+    final participants = chatData['participants'] as List<dynamic>;
+    final otherUserID = participants
+        .firstWhere((id) => id != _authService.getCurrentUser()!.uid);
+    final lastMessage = chatData['last_message'] ?? '';
+    final timestamp = (chatData['last_message_timestamp'] as Timestamp?)?.toDate();
+
+    return FutureBuilder<UserModel?>(
+      future: _chatService.getUserData(otherUserID),
+      builder: (context, userSnapshot) {
+        if (!userSnapshot.hasData) {
+          return const ListTile(title: Text("Loading chat..."));
+        }
+
+        final otherUser = userSnapshot.data!;
+
+        return Dismissible(
+          key: Key(chatDoc.id),
+          direction: DismissDirection.endToStart,
+          onDismissed: (direction) {
+            _chatService.softDeleteChat(chatDoc.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("${otherUser.username} chat deleted")),
+            );
+          },
+          background: Container(
+            color: Colors.red,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: const Icon(Icons.delete, color: Colors.white),
+          ),
+          child: ListTile(
+            leading: CircleAvatar(
+              radius: 24,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              child: const Icon(Icons.person, size: 28),
+            ),
+            title: Text(
+              otherUser.username,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(
+              lastMessage,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Text(
+              timestamp != null ? timeago.format(timestamp) : '',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatPage(
+                    receiverEmail: otherUser.email,
+                    receiverID: otherUser.uid,
+                    receiverUsername: otherUser.username,
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildUserListItem(UserModel userData, BuildContext context) {
     return UserTile(
-      text: userData["username"] ?? userData["email"],
+      text: userData.username,
       onTap: () {
+        _stopSearch();
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ChatPage(
-              receiverEmail: userData["email"],
-              receiverID: userData["uid"],
+              receiverEmail: userData.email,
+              receiverID: userData.uid,
+              receiverUsername: userData.username,
             ),
           ),
         );
