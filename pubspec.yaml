@@ -47,6 +47,13 @@ dependencies:
   shared_preferences: ^2.0.0
   logger: ^2.6.1
   timeago: ^3.6.1
+
+  flutter_secure_storage: ^9.0.0
+  fast_rsa: ^3.0.0
+  asn1lib: ^1.4.0
+  pointycastle: ^3.7.3
+  crypto: ^3.0.3
+  uuid: any
   
 
 dev_dependencies:

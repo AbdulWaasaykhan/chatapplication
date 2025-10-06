@@ -6,7 +6,7 @@ import '../components/user_tile.dart';
 import '../pages/settings_page.dart';
 import '../services/auth/auth_service.dart';
 import 'chat_page.dart';
-import 'security_settings_page.dart';
+import 'profile_page.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class HomePage extends StatefulWidget {
@@ -42,8 +42,8 @@ class _HomePageState extends State<HomePage> {
 
   List<Widget> get _pages => [
     _buildChatsPage(),
-    const SecuritySettingsPage(),
     const SettingsPage(),
+    const ProfilePage(),
   ];
 
   void _searchUsers(String query) async {
@@ -98,8 +98,8 @@ class _HomePageState extends State<HomePage> {
               label: 'Chats',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.security_outlined),
-              label: 'Security',
+              icon: Icon(Icons.person_outlined),
+              label: 'Profile',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.settings_outlined),
@@ -112,7 +112,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   AppBar _buildAppBar() {
-    if (_selectedIndex == 1) return AppBar(title: const Text("Security"));
+    if (_selectedIndex == 1) return AppBar(title: const Text("Profile"));
     if (_selectedIndex == 2) return AppBar(title: const Text("Settings"));
 
     if (_isSearching) {

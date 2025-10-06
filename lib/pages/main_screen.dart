@@ -1,5 +1,5 @@
 import 'package:chatapplication/pages/home_page.dart';
-import 'package:chatapplication/pages/settings_page.dart';
+import 'package:chatapplication/pages/profile_page.dart';
 import 'package:flutter/material.dart';
 
 class MainScreen extends StatefulWidget {
