@@ -57,31 +57,4 @@ flutter run
 
 ---
 
-## Contributing
-
-Contributions are welcome!
-
-1. Fork the repository.
-2. Create your feature branch:
-
-```bash
-git checkout -b feature/your-feature
-```
-
-3. Commit your changes:
-
-```bash
-git commit -m "Add some feature"
-```
-
-4. Push to the branch:
-
-```bash
-git push origin feature/your-feature
-```
-
-5. Create a Pull Request.
-
----
-
 **Secure Chat App** – because your messages deserve privacy and speed.
